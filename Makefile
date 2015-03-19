@@ -27,3 +27,7 @@ test:
 
 clean:
 		rebar clean
+
+local:
+		for i in {a..g}; do erl -pa ebin -sname $$i -connect_all false & done
+
