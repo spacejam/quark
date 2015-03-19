@@ -4,9 +4,7 @@
   {modules, [
              q_app,
              q_sup,
-             q_cache,
-             q_detect,
-             q_store
+             q_detect
             ]},
   {registered, [q_sup]},
   {applications, [kernel, stdlib]},
