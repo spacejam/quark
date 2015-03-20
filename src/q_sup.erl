@@ -1,7 +1,7 @@
 -module(q_sup).
 -behaviour(supervisor).
 -export([start_link/0,
-         start_child/2
+         start_child/1
         ]).
 -export([init/1]).
 -define(SERVER, ?MODULE).
@@ -9,8 +9,8 @@
 start_link() ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
-start_child(Value, LeaseTime) ->
-    supervisor:start_child(?SERVER, [Value, LeaseTime]).
+start_child(Nodes) ->
+    supervisor:start_child(?SERVER, [Nodes]).
 
 init([]) ->
     Element = {q_detect, {q_detect, start_link, []},

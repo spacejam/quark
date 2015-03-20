@@ -17,17 +17,17 @@ dialyzer: .dialyzer.plt
 				-Wbehaviours \
 				-Wunderspecs
 deps:
-		rebar get-deps
+		rebar -C rebar.conf get-deps
 
 compile:
-		rebar compile
+		rebar -C rebar.conf compile
 
 test:
-		rebar skip_deps=true eunit
+		rebar -C rebar.conf skip_deps=true eunit
 
 clean:
-		rebar clean
+		rebar -C rebar.conf clean
 
 local:
-	for i in {a..g}; do erl -pa ebin -sname $$i -connect_all false -eval "application:start(quark)" -noinput & done
-
+		HOSTNAME=`hostname -s`
+		for i in {a..e}; do erl -pa deps/lager/ebin -pa ebin -sname $$i -connect_all false -seeds a@$$HOSTNAME -noinput & done
