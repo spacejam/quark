@@ -6,3 +6,4 @@ doc/*
 dialyzer_warnings
 dialyzer_unhandled_warnings
 .rebar
+**/erl_crash.dump
