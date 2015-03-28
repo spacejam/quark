@@ -1,20 +1,31 @@
 -module(q_app).
 -behaviour(application).
--export([start/2, stop/1]).
+-export([start/2, stop/1, attempt_slop_connect/1]).
 
-start(_StartType, _StartArgs) ->
+-include_lib("nodes.hrl").
+
+-spec attempt_slop_connect(Nodes :: nodes) -> nodes.
+attempt_slop_connect(Nodes) ->
+    lists:foldl(fun(Node, NewNodes) ->
+        case net_kernel:connect_node(list_to_atom(Node)) of
+            true ->
+              error_logger:info_msg("Successfully connected to ~p", [Node]),
+              NewNodes#nodes{connected=[Node | NewNodes#nodes.connected]};
+            false ->
+              error_logger:error_msg("Failed to connect to ~p", [Node]),
+              NewNodes#nodes{slop=[Node | NewNodes#nodes.slop]};
+            ignored ->
+                error_logger:error_msg(" ignored - local node not alive!  exiting!"),
+                init:stop(),
+                #nodes{}
+        end
+    end, #nodes{}, Nodes).
+
+start(normal, _Args) ->
     % first, connect to any specified seeds
-    case init:get_argument(seeds) of
+    Nodes = case init:get_argument(seeds) of
         {ok, [Seeds]} ->
-            lists:foreach(fun(Seed) ->
-                  case net_kernel:connect_node(list_to_atom(Seed)) of
-                      true -> error_logger:info_msg("Successfully connected to ~p", [Seed]);
-                      false -> error_logger:error_msg("Failed to connect to ~p", [Seed]);
-                      ignored ->
-                          error_logger:error_msg(" ignored - local node not alive!  exiting!"),
-                          init:stop()
-                  end
-            end, Seeds);
+            attempt_slop_connect(Seeds);
         error ->
             error_logger:warning_msg("no seeds configured."),
             case net_kernel:get_net_ticktime() of
@@ -23,7 +34,8 @@ start(_StartType, _StartArgs) ->
                     init:stop();
                 _A ->
                     error_logger:info_msg("listening for others to connect.")
-            end
+            end,
+            #nodes{}
     end,
     case q_sup:start_link() of
         {ok, _Pid} ->
@@ -32,7 +44,7 @@ start(_StartType, _StartArgs) ->
             error_logger:error_msg("failed to start supervisor: ~p", [Other]),
             init:stop()
     end,
-    q_sup:start_child(nodes()).
+    q_sup:start_child(Nodes).
 
 stop(_State) ->
     ok.

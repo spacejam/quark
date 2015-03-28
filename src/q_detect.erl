@@ -7,6 +7,8 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
+-include_lib("nodes.hrl").
+
 -define(SERVER, ?MODULE).
 -define(ASK_INTERVAL_SECONDS, 3).
 -define(BASE_WAIT, 10).
