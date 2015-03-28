@@ -1,31 +1,15 @@
 -module(q_app).
 -behaviour(application).
--export([start/2, stop/1, attempt_slop_connect/1]).
+-export([start/2, stop/1]).
 
 -include_lib("nodes.hrl").
 
--spec attempt_slop_connect(Nodes :: nodes) -> nodes.
-attempt_slop_connect(Nodes) ->
-    lists:foldl(fun(Node, NewNodes) ->
-        case net_kernel:connect_node(list_to_atom(Node)) of
-            true ->
-              error_logger:info_msg("Successfully connected to ~p", [Node]),
-              NewNodes#nodes{connected=[Node | NewNodes#nodes.connected]};
-            false ->
-              error_logger:error_msg("Failed to connect to ~p", [Node]),
-              NewNodes#nodes{slop=[Node | NewNodes#nodes.slop]};
-            ignored ->
-                error_logger:error_msg(" ignored - local node not alive!  exiting!"),
-                init:stop(),
-                #nodes{}
-        end
-    end, #nodes{}, Nodes).
-
 start(normal, _Args) ->
-    % first, connect to any specified seeds
     Nodes = case init:get_argument(seeds) of
         {ok, [Seeds]} ->
-            attempt_slop_connect(Seeds);
+          % toss Seeds into the slop list, to be connected with later
+          SeedAtoms = lists:map(fun(Seed) -> list_to_atom(Seed) end, Seeds),
+          #nodes{slop=SeedAtoms};
         error ->
             error_logger:warning_msg("no seeds configured."),
             case net_kernel:get_net_ticktime() of

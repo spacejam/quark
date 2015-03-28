@@ -11,11 +11,40 @@
 
 -define(SERVER, ?MODULE).
 -define(ASK_INTERVAL_SECONDS, 3).
--define(BASE_WAIT, 10).
+-define(BASE_WAIT, 0).
 -define(SPLAY, 5).
 
+-spec filter_dead_nodes(Nodes :: nodes) -> nodes.
+filter_dead_nodes(Nodes) ->
+    lists:foldl(fun(Node, NewNodes) ->
+        case net_kernel:node_info(Node) of
+          {ok, _} ->
+              NewNodes#nodes{connected=[Node | NewNodes#nodes.connected]};
+          {error, _} ->
+              error_logger:error_msg("Lost connection to ~p", [Node]),
+              NewNodes#nodes{slop=[Node | NewNodes#nodes.slop]}
+          end
+    end, Nodes#nodes{connected=[]}, Nodes#nodes.connected).
+
+-spec attempt_slop_connect(Nodes :: nodes) -> nodes.
+attempt_slop_connect(Nodes) ->
+    lists:foldl(fun(Node, NewNodes) ->
+        case net_kernel:connect_node(Node) of
+            true ->
+              error_logger:info_msg("Successfully connected to ~p", [Node]),
+              NewNodes#nodes{connected=[Node | NewNodes#nodes.connected]};
+            false ->
+              error_logger:error_msg("Failed to connect to ~p", [Node]),
+              NewNodes#nodes{slop=[Node | NewNodes#nodes.slop]};
+            ignored ->
+                error_logger:error_msg(" ignored - local node not alive!  exiting!"),
+                init:stop(),
+                NewNodes
+        end
+    end, Nodes#nodes{slop=[]}, Nodes#nodes.slop).
+
 start_link(Nodes) ->
-    gen_server:start_link(?MODULE, [Nodes], []).
+    gen_server:start_link(?MODULE, Nodes, []).
 
 create(Value) ->
     q_sup:start_child(Value).
@@ -38,9 +67,11 @@ handle_cast(delete, State) ->
 handle_info(timeout, State) ->
     {stop, normal, State};
 handle_info(chat, State) ->
-    error_logger:info_msg("pinging connected nodes for new friends"),
+    FilteredNodes = filter_dead_nodes(State),
+    error_logger:info_msg("[~w] pinging connected nodes for new friends.  State: ~w~n", [node(), State]),
+    FreshState = attempt_slop_connect(FilteredNodes),
     erlang:send_after(splay(), self(), chat),
-    {noreply, State}.
+    {noreply, FreshState}.
 
 terminate(_Reason, _State) ->
     error_logger:info_msg("terminating detector"),

@@ -13,8 +13,8 @@ start_child(Nodes) ->
     supervisor:start_child(?SERVER, [Nodes]).
 
 init([]) ->
-    Element = {q_detect, {q_detect, start_link, []},
+    Detector = {q_detect, {q_detect, start_link, []},
                temporary, brutal_kill, worker, [q_detect]},
-    Children = [Element],
+    Children = [Detector],
     RestartStrategy = {simple_one_for_one, 0, 1},
     {ok, {RestartStrategy, Children}}.
