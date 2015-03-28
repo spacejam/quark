@@ -1,5 +1,5 @@
 # quark
-Experiments in the intersection of liveness, consensus and discovery.
+Experiments in high-fanout consensus in dynamic networks.
 
 ### themes
 * [SWIM](https://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf) for rapid convergence
