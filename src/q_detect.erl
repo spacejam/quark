@@ -12,29 +12,44 @@
 -define(SERVER, ?MODULE).
 -define(ASK_INTERVAL_SECONDS, 3).
 -define(BASE_WAIT, 0).
--define(SPLAY, 5).
+-define(SPLAY, 1).
 
--spec filter_dead_nodes(Nodes :: nodes) -> nodes.
-filter_dead_nodes(Nodes) ->
+-spec detect_dead_nodes(Nodes :: nodes) -> nodes.
+detect_dead_nodes(Nodes) ->
     lists:foldl(fun(Node, NewNodes) ->
         case net_kernel:node_info(Node) of
           {ok, _} ->
               NewNodes#nodes{connected=[Node | NewNodes#nodes.connected]};
-          {error, _} ->
-              error_logger:error_msg("Lost connection to ~p", [Node]),
+          {error, Msg} ->
+              error_logger:error_msg("[~w] Lost connection to ~p: ~w", [node(), Node, Msg]),
               NewNodes#nodes{slop=[Node | NewNodes#nodes.slop]}
           end
     end, Nodes#nodes{connected=[]}, Nodes#nodes.connected).
+
+-spec reset_connected_nodes(Nodes :: nodes) -> nodes.
+reset_connected_nodes(Nodes) ->
+    Nodes#nodes{connected=nodes()}.
+
+-spec potentially_enslop(Nodes :: nodes, NeighborNodes :: [term()]) -> nodes.
+potentially_enslop(Nodes, NeighborNodes) ->
+    % TODO perform novelty determination here
+    Desired = lists:filter(fun(Node) ->
+        case (lists:member(Node, Nodes#nodes.connected) or (Node == node())) of
+          true -> false;
+          false -> true
+        end
+    end, NeighborNodes),
+    Nodes#nodes{slop=lists:merge(Nodes#nodes.slop, Desired)}.
 
 -spec attempt_slop_connect(Nodes :: nodes) -> nodes.
 attempt_slop_connect(Nodes) ->
     lists:foldl(fun(Node, NewNodes) ->
         case net_kernel:connect_node(Node) of
             true ->
-              error_logger:info_msg("Successfully connected to ~p", [Node]),
+              error_logger:info_msg("[~w] Successfully connected to ~p", [node(), Node]),
               NewNodes#nodes{connected=[Node | NewNodes#nodes.connected]};
             false ->
-              error_logger:error_msg("Failed to connect to ~p", [Node]),
+              error_logger:error_msg("[~w] Failed to connect to ~p", [node(), Node]),
               NewNodes#nodes{slop=[Node | NewNodes#nodes.slop]};
             ignored ->
                 error_logger:error_msg(" ignored - local node not alive!  exiting!"),
@@ -53,6 +68,7 @@ splay() ->
     (?BASE_WAIT + random:uniform(?SPLAY)) * 1000.
 
 init(State) ->
+    register(detect, self()),
     erlang:send_after(splay(), self(), chat),
     {ok, State}.
 
@@ -67,9 +83,12 @@ handle_cast(delete, State) ->
 handle_info(timeout, State) ->
     {stop, normal, State};
 handle_info(chat, State) ->
-    FilteredNodes = filter_dead_nodes(State),
-    error_logger:info_msg("[~w] pinging connected nodes for new friends.  State: ~w~n", [node(), State]),
-    FreshState = attempt_slop_connect(FilteredNodes),
+    error_logger:info_msg("[~w] Checking connection states.  State: ~w~n", [node(), State]),
+    DetectedLiveNodes = detect_dead_nodes(State),
+    ResetConnectedNodes = reset_connected_nodes(DetectedLiveNodes),
+    {ResL, _BadNodes} = rpc:multicall(ResetConnectedNodes#nodes.connected, erlang, nodes, []),
+    MoreSloppyNodes = potentially_enslop(ResetConnectedNodes, lists:flatten(ResL)),
+    FreshState = attempt_slop_connect(MoreSloppyNodes),
     erlang:send_after(splay(), self(), chat),
     {noreply, FreshState}.
 

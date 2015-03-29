@@ -8,7 +8,13 @@ start(normal, _Args) ->
     Nodes = case init:get_argument(seeds) of
         {ok, [Seeds]} ->
           % toss Seeds into the slop list, to be connected with later
-          SeedAtoms = lists:map(fun(Seed) -> list_to_atom(Seed) end, Seeds),
+          SeedAtoms = lists:flatmap(fun(Seed) ->
+              SeedAtom = list_to_atom(Seed),
+              case SeedAtom == node() of
+                true -> [];
+                false -> [SeedAtom]
+              end
+          end, Seeds),
           #nodes{slop=SeedAtoms};
         error ->
             error_logger:warning_msg("no seeds configured."),
