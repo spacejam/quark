@@ -27,5 +27,8 @@ test:
 clean:
 		rebar -C rebar.conf clean
 
+kill:
+		killall beam.smp || echo "nothing killed"
+
 local: all
-		for i in {1..5}; do erl -pa deps/lager/ebin -pa ebin -sname $$i -connect_all false -seeds 1@$(shell hostname -s) -noshell debug verbose -eval "application:start(quark)" & done
+		for i in {1..5}; do erl -pa deps/lager/ebin -pa ebin -sname $$i -connect_all false -seeds 1@$(shell hostname -s) -quorum 3 -noshell debug verbose -eval "application:start(quark)" & done

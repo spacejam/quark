@@ -1,26 +1,26 @@
--module(q_detect).
+-module(gossip).
 -behaviour(gen_server).
 -export([
-         start_link/1,
-         create/1
+         start_link/1
         ]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
 -include_lib("nodes.hrl").
 
+-define(SERVER, ?MODULE).
 -define(BASE_WAIT, 5).
 -define(SPLAY, 5).
 
 -spec query_neighbors(Nodes :: nodes) -> [term()].
 query_neighbors(Nodes) ->
-    {ResL, _BadNodes} = gen_server:multi_call(Nodes#nodes.connected, detect, fetch, 1000),
+    {ResL, _BadNodes} = gen_server:multi_call(Nodes#nodes.connected, gossip, fetch, 1000),
     % error_logger:info_msg("[~w] ResL is ~w~n", [node(), ResL]),
     lists:flatmap(fun(Res) ->
         case Res of
             {_Node, {ok, {nodes, Connected, _Slop}}} -> Connected;
             _ ->
-              error_logger:info_msg("[~w] Res is actually ~w~n", [nodes(), Res]),
+              error_logger:info_msg("[~w] Res is actually ~w~n", [node(), Res]),
               []
         end
     end, ResL).
@@ -28,16 +28,13 @@ query_neighbors(Nodes) ->
 start_link(Nodes) ->
     gen_server:start_link(?MODULE, Nodes, []).
 
-create(Value) ->
-    q_sup:start_child(Value).
-
 splay() ->
     (?BASE_WAIT + random:uniform(?SPLAY)) * 1000.
 
 init(State) ->
-    [H | _Rest] = os:cmd("dd if=/dev/urandom count=1"),
-    random:seed(H, H, H),
-    register(detect, self()),
+    [H1, H2, H3 | _Rest] = os:cmd("dd if=/dev/urandom count=1"),
+    random:seed(H1, H2, H3),
+    register(gossip, self()),
     self() ! gossip,
     {ok, State}.
 
@@ -52,7 +49,7 @@ handle_cast(delete, State) ->
 
 handle_info(timeout, State) ->
     {stop, normal, State};
-handle_info(detect_dead, State) ->
+handle_info(gossip_dead, State) ->
     {noreply, lists:foldl(fun(Node, NewNodes) ->
         case net_kernel:node_info(Node) of
           {ok, _} ->
@@ -86,16 +83,16 @@ handle_info(gossip, State) ->
     Desired = lists:filter(fun(Node) ->
         not (lists:member(Node, State#nodes.connected) or (Node == node()))
     end, NeighborNodes),
-    self() ! detect_dead,
+    self() ! gossip_dead,
     self() ! reset_connected,
     self() ! connect_slop,
     erlang:send_after(splay(), self(), gossip),
     {noreply, State#nodes{slop=lists:merge(State#nodes.slop, Desired)}}.
 
 terminate(_Reason, _State) ->
-    error_logger:info_msg("terminating detector"),
+    error_logger:info_msg("terminating gossip"),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
-    error_logger:info_msg("code change in detector"),
+    error_logger:info_msg("code change in gossip"),
     {ok, State}.

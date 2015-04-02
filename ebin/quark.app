@@ -1,12 +1,16 @@
 {application, quark,
  [{description, "distributed liveness telemetry"},
-  {vsn, "0.0.1"},
+  {vsn, "0.0.2"},
   {modules, [
-             q_app,
-             q_sup,
-             q_detect
+             quark_app,
+             gossip_sup,
+             election_sup,
+             consensus_sup,
+             gossip,
+             election,
+             consensus
             ]},
-  {registered, [q_sup]},
+  {registered, [gossip_sup]},
   {applications, [kernel, stdlib]},
-  {mod, {q_app, []}}
+  {mod, {quark_app, []}}
  ]}.
